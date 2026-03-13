@@ -11,6 +11,7 @@ from langchain.chains import RetrievalQA
 from langchain.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import glob
+import tempfile
 
 # Load environment variables
 load_dotenv()
@@ -51,7 +52,7 @@ async def startup_event():
         embeddings = OpenAIEmbeddings()
         
         # Try to load existing vectorstore or create new one
-        persist_directory = "./chroma_db"
+        persist_directory = "/tmp/chroma_db"  # Vercel's writable directory
         
         if os.path.exists(persist_directory):
             # Load existing vectorstore
@@ -61,7 +62,8 @@ async def startup_event():
             )
             print(f"Loaded existing vectorstore with {vectorstore._collection.count()} documents")
         else:
-            # Create new vectorstore (you'll need to add documents)
+            # Create new vectorstore
+            os.makedirs(persist_directory, exist_ok=True)
             vectorstore = Chroma(
                 persist_directory=persist_directory,
                 embedding_function=embeddings
@@ -138,10 +140,19 @@ async def add_documents(docs: list[Document]):
     global vectorstore, qa_chain
     
     try:
+        if not os.getenv("OPENAI_API_KEY"):
+            return {
+                "message": "OpenAI API key not set",
+                "status": "error"
+            }
+            
+        embeddings = OpenAIEmbeddings()
+        persist_directory = "/tmp/chroma_db"
+        os.makedirs(persist_directory, exist_ok=True)
+        
         if not vectorstore:
-            embeddings = OpenAIEmbeddings()
             vectorstore = Chroma(
-                persist_directory="./chroma_db",
+                persist_directory=persist_directory,
                 embedding_function=embeddings
             )
         
