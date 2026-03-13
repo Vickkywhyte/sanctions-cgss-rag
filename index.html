@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CGSS Sanctions Assistant — RAG for ACAMS Study Guide</title>
+<style>
+  :root {
+    --blue: #2563eb;
+    --blue-light: #eff6ff;
+    --blue-mid: #bfdbfe;
+    --green: #059669;
+    --green-light: #ecfdf5;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-500: #6b7280;
+    --gray-700: #374151;
+    --gray-900: #111827;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-900);
+    min-height: 100vh;
+  }
+
+  header {
+    background: linear-gradient(135deg, #1a2a4f 0%, #2c3e6e 100%);
+    color: white;
+    padding: 24px 32px;
+  }
+  header h1 { 
+    font-size: 22px; 
+    font-weight: 700; 
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  header p { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+  
+  .status-badge {
+    background: rgba(255,255,255,0.2);
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: normal;
+  }
+
+  .pipeline {
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+    padding: 0 32px;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-500);
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .step.active {
+    color: var(--blue);
+    border-bottom-color: var(--blue);
+  }
+  .step.done { color: var(--green); border-bottom-color: var(--green); }
+  .step-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--gray-200);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .step.active .step-num { background: var(--blue); color: white; }
+  .step.done .step-num { background: var(--green); color: white; }
+  .step-arrow { color: var(--gray-300); font-size: 16px; padding: 14px 4px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 0;
+    min-height: calc(100vh - 120px);
+  }
+
+  .left {
+    background: white;
+    border-right: 1px solid var(--gray-200);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--gray-500);
+    margin-bottom: 8px;
+  }
+
+  .api-row { display: flex; gap: 8px; }
+  .api-row input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: monospace;
+  }
+  .api-row input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-mid); }
+  .btn-sm {
+    padding: 9px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-300);
+    background: white;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--gray-700);
+    white-space: nowrap;
+  }
+  .btn-sm:hover { background: var(--gray-100); }
+
+  .faq-card {
+    background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf2 100%);
+    border-radius: var(--radius);
+    padding: 16px;
+    border: 1px solid var(--gray-200);
+  }
+  .faq-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--gray-900);
+  }
+  .faq-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--gray-700);
+  }
+  .stat {
+    background: white;
+    padding: 4px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--gray-200);
+  }
+
+  .step-card {
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .step-card-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    font-weight: 600; font-size: 11px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .step-card-body { padding: 10px 12px; color: var(--gray-700); line-height: 1.5; }
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 99px;
+    font-size: 10px; font-weight: 600;
+    margin-left: auto;
+  }
+  .badge-blue { background: var(--blue-light); color: var(--blue); }
+  .badge-green { background: var(--green-light); color: var(--green); }
+
+  .sample-questions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sample-q {
+    padding: 8px 12px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .sample-q:hover {
+    background: var(--blue-light);
+    border-color: var(--blue-mid);
+  }
+
+  .right {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+  }
+
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .welcome {
+    margin: auto;
+    text-align: center;
+    max-width: 480px;
+    padding: 40px 20px;
+  }
+  .welcome-icon { font-size: 48px; margin-bottom: 16px; }
+  .welcome h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .welcome p { color: var(--gray-500); font-size: 14px; line-height: 1.6; }
+
+  .msg { display: flex; flex-direction: column; gap: 6px; }
+  .msg.user { align-items: flex-end; }
+  .msg.assistant { align-items: flex-start; }
+
+  .bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .msg.user .bubble { background: var(--blue); color: white; border-bottom-right-radius: 4px; }
+  .msg.assistant .bubble { background: white; border: 1px solid var(--gray-200); border-bottom-left-radius: 4px; }
+
+  .trace {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    font-size: 11px;
+    max-width: 85%;
+  }
+  .trace-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--gray-500);
+  }
+  .trace-head:hover { color: var(--gray-700); }
+  .trace-body { padding: 0 12px 12px; display: none; }
+  .trace-body.open { display: block; }
+
+  .trace-step { margin-bottom: 10px; }
+  .trace-step-label {
+    font-weight: 700; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .trace-chunk {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    color: var(--gray-700);
+    line-height: 1.4;
+  }
+  .chunk-meta { display: flex; gap: 8px; margin-bottom: 2px; }
+  .chunk-score {
+    background: var(--green-light);
+    color: var(--green);
+    padding: 1px 6px;
+    border-radius: 99px;
+    font-weight: 700;
+  }
+  .chunk-source { color: var(--gray-500); }
+  .chunk-text { font-size: 11px; color: var(--gray-600); max-height: 60px; overflow: hidden; }
+
+  .prompt-box {
+    background: #1e293b;
+    color: #94a3b8;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 10px;
+    white-space: pre-wrap;
+    max-height: 120px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
+
+  .input-bar {
+    border-top: 1px solid var(--gray-200);
+    padding: 16px 24px;
+    background: white;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .input-bar textarea {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    min-height: 42px;
+    max-height: 120px;
+    line-height: 1.5;
+  }
+  .input-bar textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-mid); }
+  .btn-send {
+    padding: 10px 20px;
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    min-height: 42px;
+  }
+  .btn-send:hover { background: #1d4ed8; }
+  .btn-send:disabled { background: var(--gray-300); cursor: not-allowed; }
+
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--gray-900);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    z-index: 999;
+    animation: slideUp 0.3s ease;
+    display: none;
+  }
+  .toast.show { display: block; }
+  .toast.error { background: var(--red); }
+  .toast.success { background: var(--green); }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    📘 CGSS Sanctions Assistant
+    <span class="status-badge" id="doc-status">Loading...</span>
+  </h1>
+  <p>Ask questions about the ACAMS Certified Global Sanctions Specialist (CGSS) study guide — sanctions frameworks, compliance programs, evasion techniques, and more</p>
+</header>
+
+<div class="pipeline">
+  <div class="step" id="step-1"><span class="step-num">1</span> INGEST</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step-2"><span class="step-num">2</span> CHUNK</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step-3"><span class="step-num">3</span> EMBED</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step-4"><span class="step-num">4</span> RETRIEVE</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step-5"><span class="step-num">5</span> GENERATE</div>
+</div>
+
+<div class="layout">
+  <div class="left">
+    <div>
+      <div class="section-label">OpenRouter API Key (required)</div>
+      <div class="api-row">
+        <input type="password" id="api-key" placeholder="sk-or-…" />
+        <button class="btn-sm" onclick="saveKey()">Save</button>
+      </div>
+      <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">
+        Get a free key at <a href="https://openrouter.ai" target="_blank">openrouter.ai</a>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-title">📋 CGSS Study Guide</div>
+      <div class="faq-stats">
+        <span class="stat" id="chunk-stat">Loading chunks...</span>
+        <span class="stat">600-word chunks</span>
+      </div>
+    </div>
+
+    <div class="step-card" id="card-chunk">
+      <div class="step-card-head">
+        <span>✂️ Step 2 — Chunking</span>
+        <span class="badge badge-blue" id="chunk-count-badge">—</span>
+      </div>
+      <div class="step-card-body">
+        Study guide split into 600-word chunks with 120-word overlap for better context.
+      </div>
+    </div>
+
+    <div class="step-card" id="card-embed">
+      <div class="step-card-head">
+        <span>🔢 Step 3 — Embedding</span>
+        <span class="badge badge-green">TF-IDF + Keyword Boost</span>
+      </div>
+      <div class="step-card-body">
+        TF-IDF vectors with sanctions terminology boosting (10% per keyword match).
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Try asking</div>
+      <div class="sample-questions">
+        <div class="sample-q" onclick="setSampleQuestion('What are the types of sanctions?')">📋 What are the types of sanctions?</div>
+        <div class="sample-q" onclick="setSampleQuestion('Explain the OFAC 50% rule')">📊 Explain the OFAC 50% rule</div>
+        <div class="sample-q" onclick="setSampleQuestion('How do you calculate beneficial ownership?')">🧮 How do you calculate beneficial ownership?</div>
+        <div class="sample-q" onclick="setSampleQuestion('What is the difference between ownership and control?')">⚖️ Difference between ownership and control?</div>
+        <div class="sample-q" onclick="setSampleQuestion('What are the consequences of noncompliance with sanctions?')">⚠️ Consequences of noncompliance?</div>
+        <div class="sample-q" onclick="setSampleQuestion('How do you screen against sanctions lists?')">🔍 How to screen against sanctions lists?</div>
+        <div class="sample-q" onclick="setSampleQuestion('What is wire stripping?')">✂️ What is wire stripping?</div>
+        <div class="sample-q" onclick="setSampleQuestion('Explain transshipment and how it\'s used for evasion')">🚢 Explain transshipment</div>
+        <div class="sample-q" onclick="setSampleQuestion('What are the requirements for reporting frozen assets?')">📝 Reporting requirements for frozen assets</div>
+        <div class="sample-q" onclick="setSampleQuestion('How do sanctions apply to cryptoassets?')">💰 Sanctions and cryptoassets</div>
+        <div class="sample-q" onclick="setSampleQuestion('What is the role of OFAC?')">🏛️ What is the role of OFAC?</div>
+        <div class="sample-q" onclick="setSampleQuestion('Explain primary vs secondary sanctions')">🌍 Primary vs secondary sanctions</div>
+        <div class="sample-q" onclick="setSampleQuestion('What is a general license?')">📄 What is a general license?</div>
+        <div class="sample-q" onclick="setSampleQuestion('How do you handle frozen assets?')">❄️ How do you handle frozen assets?</div>
+        <div class="sample-q" onclick="setSampleQuestion('What is the EU 50% rule?')">🇪🇺 What is the EU 50% rule?</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="chat-area" id="chat-area">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">📘</div>
+        <h2>CGSS Sanctions Assistant</h2>
+        <p>Ask questions about the ACAMS Certified Global Sanctions Specialist (CGSS) study guide — sanctions frameworks, compliance programs, evasion techniques, investigation procedures, and more.</p>
+        <p style="margin-top: 12px;">✨ Click any sample question to get started!</p>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <textarea id="query-input" placeholder="Ask about sanctions compliance, OFAC rules, beneficial ownership…" rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendQuery()}"
+        oninput="autoResize(this)"></textarea>
+      <button class="btn-send" id="send-btn" onclick="sendQuery()">Ask</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// IMPORTANT: This points to port 8001 (different from your original RAG)
+const API = 'http://localhost:8001';
+let apiKey = localStorage.getItem('cgss_api_key') || '';
+if (apiKey) document.getElementById('api-key').value = apiKey;
+
+function saveKey() {
+  apiKey = document.getElementById('api-key').value.trim();
+  localStorage.setItem('cgss_api_key', apiKey);
+  showToast('API key saved', 'success');
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function setStep(n, state) {
+  const el = document.getElementById('step-' + n);
+  if (!el) return;
+  el.className = 'step ' + state;
+}
+
+function activateSteps(...nums) {
+  for (let i = 1; i <= 5; i++) setStep(i, '');
+  nums.forEach(n => setStep(n, 'active'));
+}
+
+function completeSteps(...nums) {
+  nums.forEach(n => setStep(n, 'done'));
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function setSampleQuestion(q) {
+  document.getElementById('query-input').value = q;
+  autoResize(document.getElementById('query-input'));
+  sendQuery();
+}
+
+async function checkStatus() {
+  try {
+    const res = await fetch(`${API}/status`);
+    const data = await res.json();
+    
+    const statusEl = document.getElementById('doc-status');
+    const chunkStat = document.getElementById('chunk-stat');
+    const chunkBadge = document.getElementById('chunk-count-badge');
+    
+    if (data.document_loaded) {
+      statusEl.textContent = `✅ ${data.chunk_count} chunks loaded`;
+      statusEl.style.background = 'rgba(16, 185, 129, 0.3)';
+      chunkStat.textContent = `📊 ${data.chunk_count} chunks`;
+      chunkBadge.textContent = data.chunk_count + ' chunks';
+      completeSteps(1, 2, 3);
+    } else {
+      statusEl.textContent = '⚠️ Document not loaded';
+      statusEl.style.background = 'rgba(245, 158, 11, 0.3)';
+      chunkStat.textContent = '❌ Not loaded';
+      chunkBadge.textContent = 'Not loaded';
+    }
+  } catch (e) {
+    console.error('Status check failed:', e);
+    document.getElementById('doc-status').textContent = '⚠️ Server offline';
+  }
+}
+
+async function sendQuery() {
+  const key = document.getElementById('api-key').value.trim() || apiKey;
+  if (!key) { 
+    showToast('Enter your OpenRouter API key first', 'error'); 
+    return; 
+  }
+  
+  if (!key.startsWith('sk-or-')) {
+    showToast('Invalid key format. Must start with sk-or-', 'error');
+    return;
+  }
+
+  const textarea = document.getElementById('query-input');
+  const query = textarea.value.trim();
+  if (!query) return;
+
+  textarea.value = '';
+  textarea.style.height = 'auto';
+  document.getElementById('welcome').style.display = 'none';
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  addMessage('user', query);
+  activateSteps(4, 5);
+  const placeholder = addMessage('assistant', '…', 'thinking');
+
+  try {
+    const res = await fetch(`${API}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, api_key: key, top_k: 8 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Query failed');
+
+    placeholder.remove();
+    completeSteps(1, 2, 3, 4, 5);
+    addAssistantMessage(data);
+  } catch (e) {
+    placeholder.remove();
+    addMessage('assistant', '❌ Error: ' + e.message);
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ask';
+  }
+}
+
+function addMessage(role, text, cls = '') {
+  const area = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = `<div class="bubble ${cls}">${escHtml(text)}</div>`;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+
+function addAssistantMessage(data) {
+  const area = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  const traceId = 'trace-' + Date.now();
+
+  div.innerHTML = `
+    <div class="bubble" style="white-space:pre-wrap">${escHtml(data.answer)}</div>
+    <div class="trace">
+      <div class="trace-head" onclick="toggleTrace('${traceId}')">
+        🔬 Pipeline trace — ${data.retrieved_chunks.length} sections retrieved · Click to expand
+      </div>
+      <div class="trace-body" id="${traceId}">
+        <div class="trace-step">
+          <div class="trace-step-label" style="color:var(--blue)">⚡ Step 4 — Retrieve (top-${data.retrieved_chunks.length})</div>
+          ${data.retrieved_chunks.map((c, i) => `
+            <div class="trace-chunk">
+              <div class="chunk-meta">
+                <span class="chunk-score">score ${c.score}</span>
+                <span class="chunk-source">📄 section ${c.chunk_index}</span>
+              </div>
+              <div class="chunk-keywords" style="font-size:10px; color:var(--purple); margin-bottom:2px;">
+                🔑 ${c.keywords ? c.keywords.join(', ') : ''}
+              </div>
+              <div class="chunk-text">${escHtml(c.preview || c.text.slice(0, 200) + '…')}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="trace-step">
+          <div class="trace-step-label" style="color:var(--purple)">🤖 Step 5 — Prompt sent to LLM</div>
+          <div class="prompt-box">${escHtml(data.prompt_used.slice(0, 600))}${data.prompt_used.length > 600 ? '\n…(truncated)' : ''}</div>
+        </div>
+      </div>
+    </div>
+  `;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+function toggleTrace(id) {
+  const body = document.getElementById(id);
+  body.classList.toggle('open');
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Check status on load and every 30 seconds
+checkStatus();
+setInterval(checkStatus, 30000);
+</script>
+</body>
+</html>
